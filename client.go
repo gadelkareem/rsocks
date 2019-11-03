@@ -171,8 +171,7 @@ func parseProxyLine(line string) (ipStr string, u *url.URL, err error) {
 func proxyIp(proxyUrl *url.URL) (ip string, err error) {
 
 	transport := &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
-	c := &http.Client{Transport: transport}
-	c.Timeout = 60 * time.Second
+	c := &http.Client{Transport: transport, Timeout: 60 * time.Second}
 
 	r, err := retryRequest(
 		c,
