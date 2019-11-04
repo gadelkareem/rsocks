@@ -3,7 +3,6 @@ package rsocks
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/cenkalti/backoff"
@@ -71,7 +70,7 @@ func (c *client) List() (map[string]*url.URL, error) {
 	_, err = h.LiftRLimits()
 	h.PanicOnError(err)
 
-	wg := h.NewWgExec(50)
+	wg := h.NewWgExec(100)
 	var l string
 	for scanner.Scan() {
 		l = scanner.Text()
@@ -160,10 +159,14 @@ func parseProxyLine(line string) (ipStr string, u *url.URL, err error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("%s parsing line %s URL %s", err, line, lu)
 	}
-	ipStr, err = proxyIp(u)
+	err = h.Retry(func() (e error) {
+		ipStr, e = proxyIp(u)
+		return
+	}, 10)
 	if err != nil {
 		return "", nil, fmt.Errorf("%s getting IP for line %s URL %s", err, line, lu)
 	}
+	//println(ipStr, u.String())
 
 	return
 }
@@ -173,7 +176,7 @@ func proxyIp(proxyUrl *url.URL) (ip string, err error) {
 	transport := &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
 	c := &http.Client{Transport: transport, Timeout: 60 * time.Second}
 
-	r, err := retryRequest(
+	r, err := request(
 		c,
 		http.MethodGet,
 		"http://ifconfig.io/ip",
@@ -249,17 +252,7 @@ func (a apiError) StatusCode() int {
 func formatError(r *http.Response) error {
 	defer r.Body.Close()
 	e := new(apiError)
-
-	pl := &struct {
-		ErrorMessage string `json:"detail"`
-	}{}
-	if err := json.NewDecoder(r.Body).Decode(pl); err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
-	} else if pl.ErrorMessage != "" {
-		e.err = pl.ErrorMessage
-	} else {
-		e.err = fmt.Sprintf("error statusCode code %d: %s", r.StatusCode, http.StatusText(r.StatusCode))
-	}
+	e.err = fmt.Sprintf("error statusCode code %d: %s", r.StatusCode, http.StatusText(r.StatusCode))
 	e.statusCode = r.StatusCode
 
 	return e

@@ -7,6 +7,7 @@ import (
 	"testing"
 )
 
+//go test -timeout 999999s
 func TestNewClient(t *testing.T) {
 	u := os.Getenv("RS_URL")
 	if u == "" {
